@@ -1,0 +1,71 @@
+#! /usr/bin/env ruby
+
+def guess_type(value)
+  v = value.strip
+  if v.start_with?('"') and v.end_with?('"')
+    # "foo"
+    t = :string
+  elsif v.start_with?("'") and v.end_with?("'")
+    # 'foo'
+    t = :string
+  elsif v.casecmp?("true") or v.casecmp?("false")
+    # true or false 
+    t = :boolean
+  elsif v.match(/^-?\d+?$/)
+    # 1 or -1
+    t = :integer
+  elsif v.match(/^-?\d+(\.\d+)?$/)
+    # 1.1 or -1.1
+    t = :float
+  else
+    t = :string
+  end
+  puts "guessed: '" + value + "' is " + t.to_s
+  return t
+end
+
+# TODO: parse args. options mighg be:
+# ramlgen type --format=csv --delimiter=\t --header=true --lines=200 --verify FILE
+# ramlgen type --format=json --verify FILE
+delimiter = ","
+samples = []
+f = STDIN
+f.each_line do |line|
+  types = line.chomp.split(delimiter).map {|v| guess_type(v)}
+  samples.push(types)
+  # TODO: how many lines do we want to use?
+end
+
+require 'matrix'
+m = Matrix.rows(samples, false)
+
+def guess_type_by_statistics(guessed_types)
+  sums = guessed_types.inject({}) {|hash, type| 
+	hash[type] = hash[type] ? hash[type] + 1 : 1
+	hash
+  }
+  # puts sums 
+  if sums.length == 1
+    return sums.keys[0]
+  else
+    max = 0
+    tops = sums.inject([]) {|array, (key, value)|
+      if value > max
+        max = value
+        array = [key]
+      elsif value == max
+        array << key
+      end
+      array
+    }
+    # puts tops
+    # TODO: priority?
+    return tops[0]
+  end
+end
+
+for i in (0...m.column_size)
+  t = guess_type_by_statistics(m.column(i))
+  puts "guessed: column(" + i.to_s + ")=" + m.column(i).to_s + " is " + t.to_s
+end
+ 
